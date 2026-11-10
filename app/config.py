@@ -19,10 +19,10 @@ class Settings(BaseSettings):
     cloner_api_key: str = ''
 
     # Interface web du cloner : ces valeurs doivent être injectées comme secrets Render.
-    ui_username: str = ''
-    ui_password: str = ''
-    ui_recovery_code: str = ''
-    ui_session_secret: str = ''
+    cloner_ui_username: str = ''
+    cloner_ui_password: str = ''
+    cloner_ui_recovery_code: str = ''
+    cloner_ui_session_secret: str = ''
 
     # S3 or S3-compatible storage. MAZIGHO currently uses Vercel Blob;
     # these settings become active only when an S3-compatible bucket is supplied.

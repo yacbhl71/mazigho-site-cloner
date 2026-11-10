@@ -25,7 +25,7 @@ app = FastAPI(title='MAZIGHO Site Cloner', version='1.0.0')
 app.mount('/static', StaticFiles(directory=ROOT / 'static'), name='static')
 app.mount('/local-assets', StaticFiles(directory=LOCAL_ASSETS), name='local-assets')
 settings = get_settings()
-runtime_ui_password = settings.ui_password
+runtime_ui_password = settings.cloner_ui_password
 jobs: dict[UUID, JobState] = {}
 tasks: dict[UUID, asyncio.Task] = {}
 requests_by_ip: dict[str, deque[datetime]] = defaultdict(deque)
@@ -45,12 +45,12 @@ def allow(ip: str) -> bool:
 
 
 def ui_auth_configured() -> bool:
-    return bool(settings.ui_username and runtime_ui_password and settings.ui_session_secret)
+    return bool(settings.cloner_ui_username and runtime_ui_password and settings.cloner_ui_session_secret)
 
 
 def make_session(username: str) -> str:
     payload = base64.urlsafe_b64encode(json.dumps({'u': username, 'exp': int(time.time()) + 8 * 3600}, separators=(',', ':')).encode()).decode().rstrip('=')
-    signature = hmac.new(settings.ui_session_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    signature = hmac.new(settings.cloner_ui_session_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return f'{payload}.{signature}'
 
 
@@ -60,12 +60,12 @@ def valid_session(request: Request) -> bool:
     token = request.cookies.get(UI_COOKIE, '')
     try:
         payload, signature = token.split('.', 1)
-        expected = hmac.new(settings.ui_session_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        expected = hmac.new(settings.cloner_ui_session_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(signature, expected):
             return False
         padded = payload + '=' * (-len(payload) % 4)
         data = json.loads(base64.urlsafe_b64decode(padded))
-        return data.get('u') == settings.ui_username and int(data.get('exp', 0)) > int(time.time())
+        return data.get('u') == settings.cloner_ui_username and int(data.get('exp', 0)) > int(time.time())
     except (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError):
         return False
 
@@ -105,7 +105,7 @@ async def login(request: Request):
         raise HTTPException(400, 'Requête de connexion invalide.')
     username = str(body.get('username', ''))
     password = str(body.get('password', ''))
-    if not hmac.compare_digest(username, settings.ui_username) or not hmac.compare_digest(password, runtime_ui_password):
+    if not hmac.compare_digest(username, settings.cloner_ui_username) or not hmac.compare_digest(password, runtime_ui_password):
         raise HTTPException(401, 'Identifiants invalides.')
     response = JSONResponse({'ok': True})
     response.set_cookie(UI_COOKIE, make_session(username), httponly=True, secure=True, samesite='lax', max_age=8 * 3600, path='/')
@@ -115,7 +115,7 @@ async def login(request: Request):
 @app.post('/auth/reset', include_in_schema=False)
 async def reset_password(request: Request):
     global runtime_ui_password
-    if not settings.ui_recovery_code:
+    if not settings.cloner_ui_recovery_code:
         raise HTTPException(503, 'La récupération n’est pas configurée côté serveur.')
     try:
         body = await request.json()
@@ -124,7 +124,7 @@ async def reset_password(request: Request):
     username = str(body.get('username', ''))
     recovery_code = str(body.get('recovery_code', ''))
     new_password = str(body.get('new_password', ''))
-    if not hmac.compare_digest(username, settings.ui_username) or not hmac.compare_digest(recovery_code, settings.ui_recovery_code):
+    if not hmac.compare_digest(username, settings.cloner_ui_username) or not hmac.compare_digest(recovery_code, settings.cloner_ui_recovery_code):
         raise HTTPException(401, 'Code de récupération invalide.')
     if len(new_password) < 10:
         raise HTTPException(400, 'Le nouveau mot de passe doit contenir au moins 10 caractères.')
