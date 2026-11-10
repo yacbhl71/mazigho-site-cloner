@@ -1,0 +1,38 @@
+services:
+  cloner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    shm_size: '1gb'
+    ports:
+      - '8000:8000'
+    env_file:
+      - .env
+    environment:
+      - MAZIGHO_API_URL=${MAZIGHO_API_URL}
+      - MAZIGHO_API_KEY=${MAZIGHO_API_KEY}
+      - CLONER_API_KEY=${CLONER_API_KEY}
+      - BLOB_READ_WRITE_TOKEN=${BLOB_READ_WRITE_TOKEN}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_PREFIX=${S3_PREFIX:-cloned/}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - PUBLIC_CDN_URL=${PUBLIC_CDN_URL}
+      - IMAGE_MAX_WIDTH=${IMAGE_MAX_WIDTH:-1600}
+      - IMAGE_THUMB_WIDTH=${IMAGE_THUMB_WIDTH:-400}
+      - CLONER_ENABLED=${CLONER_ENABLED:-true}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
