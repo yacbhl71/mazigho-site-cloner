@@ -2,6 +2,7 @@ from hashlib import sha256
 from pathlib import Path
 from urllib.parse import quote
 import os
+import time
 import boto3
 import httpx
 from app.config import Settings
@@ -25,22 +26,33 @@ class AssetUploader:
 
     def _put_vercel_blob(self, key: str, content: bytes, content_type: str) -> str:
         pathname = quote(key, safe='/')
-        response = httpx.put(
-            f'https://blob.vercel-storage.com/{pathname}',
-            content=content,
-            headers={
-                'Authorization': f'Bearer {self.blob_token}',
-                'Content-Type': content_type,
-                'x-api-version': '7',
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        data = response.json()
-        url = data.get('url') if isinstance(data, dict) else None
-        if not url:
-            raise RuntimeError('Vercel Blob n’a pas renvoyé d’URL publique.')
-        return str(url)
+        timeout_seconds = float(getattr(self.settings, 'asset_upload_timeout_seconds', 120.0))
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = httpx.put(
+                    f'https://blob.vercel-storage.com/{pathname}',
+                    content=content,
+                    headers={
+                        'Authorization': f'Bearer {self.blob_token}',
+                        'Content-Type': content_type,
+                        'x-api-version': '7',
+                    },
+                    timeout=httpx.Timeout(timeout_seconds, connect=min(20.0, timeout_seconds)),
+                )
+                response.raise_for_status()
+                data = response.json()
+                url = data.get('url') if isinstance(data, dict) else None
+                if not url:
+                    raise RuntimeError('Vercel Blob n’a pas renvoyé d’URL publique.')
+                return str(url)
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                raise RuntimeError('Délai dépassé pendant l’upload Vercel Blob.') from exc
+        raise RuntimeError('Upload Vercel Blob impossible.') from last_error
 
     def put(self, content: bytes, original_url: str, content_type: str = 'image/webp', extension: str = 'webp', thumbnail: bool = False) -> str:
         key = self._key(original_url, extension, thumbnail)

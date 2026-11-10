@@ -4,8 +4,10 @@ from app.models import CloneRequest, JobStatus
 from app.platforms.woocommerce import WooCommerceExtractor
 from app.cloner.detector import detect, FORCED_WARNING, ROBOTS_BLOCKED_ERROR
 from app.assets.uploader import AssetUploader
+from app.assets.downloader import download_and_optimize
 from app.config import Settings
 from unittest.mock import patch
+import httpx
 import pytest
 
 def test_analyzer_detects_sections():
@@ -129,3 +131,23 @@ def test_vercel_blob_uploader_has_priority_over_s3(monkeypatch):
     put.assert_called_once()
     assert put.call_args.kwargs['headers']['Authorization'] == 'Bearer blob-token-for-test'
     assert put.call_args.args[0].startswith('https://blob.vercel-storage.com/cloned/42/')
+
+@pytest.mark.asyncio
+async def test_image_download_retries_after_read_timeout():
+    class Response:
+        headers = {'content-type': 'image/png'}
+        content = b'png-bytes'
+        def raise_for_status(self): return None
+
+    class Client:
+        def __init__(self): self.calls = 0
+        async def get(self, url, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise httpx.ReadTimeout('temporary timeout')
+            return Response()
+
+    client = Client()
+    asset = await download_and_optimize('https://source.test/image.png', client, retries=2)
+    assert asset is not None
+    assert client.calls == 2

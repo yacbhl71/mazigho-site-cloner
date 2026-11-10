@@ -7,10 +7,13 @@ class Settings(BaseSettings):
 
     host: str = '0.0.0.0'
     port: int = 8000
-    max_clone_duration_seconds: int = 300
+    max_clone_duration_seconds: int = 900
     max_concurrent_jobs: int = 3
     max_products: int = 2500
-    request_timeout_seconds: float = 25.0
+    request_timeout_seconds: float = 45.0
+    asset_download_timeout_seconds: float = 90.0
+    asset_upload_timeout_seconds: float = 120.0
+    mazigho_import_timeout_seconds: float = 120.0
     mazigho_api_url: str = ''
     mazigho_api_key: str = ''
     cloner_api_key: str = ''

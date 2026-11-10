@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from PIL import Image
 import httpx
+import asyncio
 
 
 @dataclass
@@ -41,26 +42,34 @@ def _thumbnail(image: Image.Image, width: int) -> bytes | None:
     return output.getvalue()
 
 
-async def download_and_optimize(url: str, client: httpx.AsyncClient, max_width: int = 1600, thumb_width: int = 400, unchanged_threshold: int = 100 * 1024) -> OptimizedAsset | None:
+async def download_and_optimize(url: str, client: httpx.AsyncClient, max_width: int = 1600, thumb_width: int = 400, unchanged_threshold: int = 100 * 1024, timeout_seconds: float = 90.0, retries: int = 3) -> OptimizedAsset | None:
     if not url or not url.startswith(('http://', 'https://')): return None
-    try:
-        response = await client.get(url, follow_redirects=True)
-        response.raise_for_status()
-        raw = response.content
-        content_type = response.headers.get('content-type', '').split(';', 1)[0].lower()
-        if content_type == 'image/svg+xml' or content_type == 'image/gif' or len(raw) < unchanged_threshold:
-            return OptimizedAsset(raw, content_type or 'application/octet-stream', content_type.split('/')[-1].replace('svg+xml', 'svg') or 'bin')
-        image = Image.open(BytesIO(raw))
-        original_type, original_ext = _content_type(image, content_type)
-        thumb = _thumbnail(image, thumb_width)
-        if original_type == 'image/png' and _has_transparency(image):
+    timeout = httpx.Timeout(timeout_seconds, connect=min(20.0, timeout_seconds))
+    for attempt in range(retries):
+        try:
+            response = await client.get(url, follow_redirects=True, timeout=timeout)
+            response.raise_for_status()
+            raw = response.content
+            content_type = response.headers.get('content-type', '').split(';', 1)[0].lower()
+            if content_type == 'image/svg+xml' or content_type == 'image/gif' or len(raw) < unchanged_threshold:
+                return OptimizedAsset(raw, content_type or 'application/octet-stream', content_type.split('/')[-1].replace('svg+xml', 'svg') or 'bin')
+            image = Image.open(BytesIO(raw))
+            original_type, original_ext = _content_type(image, content_type)
+            thumb = _thumbnail(image, thumb_width)
+            if original_type == 'image/png' and _has_transparency(image):
+                image.thumbnail((max_width, max_width), Image.Resampling.LANCZOS)
+                output = BytesIO(); image.save(output, format='PNG', optimize=True)
+                return OptimizedAsset(output.getvalue(), 'image/png', 'png', thumb, 'image/png' if thumb else None)
+            if original_type not in {'image/jpeg', 'image/png'}:
+                return OptimizedAsset(raw, original_type, original_ext, thumb, 'image/webp' if thumb else None)
             image.thumbnail((max_width, max_width), Image.Resampling.LANCZOS)
-            output = BytesIO(); image.save(output, format='PNG', optimize=True)
-            return OptimizedAsset(output.getvalue(), 'image/png', 'png', thumb, 'image/png' if thumb else None)
-        if original_type not in {'image/jpeg', 'image/png'}:
-            return OptimizedAsset(raw, original_type, original_ext, thumb, 'image/webp' if thumb else None)
-        image.thumbnail((max_width, max_width), Image.Resampling.LANCZOS)
-        output = BytesIO(); image.convert('RGB').save(output, format='WEBP', quality=84, method=6)
-        return OptimizedAsset(output.getvalue(), 'image/webp', 'webp', thumb, 'image/webp' if thumb else None)
-    except (httpx.HTTPError, OSError, ValueError):
-        return None
+            output = BytesIO(); image.convert('RGB').save(output, format='WEBP', quality=84, method=6)
+            return OptimizedAsset(output.getvalue(), 'image/webp', 'webp', thumb, 'image/webp' if thumb else None)
+        except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+            if attempt + 1 < retries:
+                await asyncio.sleep(1.5 * (attempt + 1))
+                continue
+            return None
+        except (httpx.HTTPError, OSError, ValueError):
+            return None
+    return None
