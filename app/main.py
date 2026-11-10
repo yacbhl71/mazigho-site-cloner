@@ -25,6 +25,7 @@ app = FastAPI(title='MAZIGHO Site Cloner', version='1.0.0')
 app.mount('/static', StaticFiles(directory=ROOT / 'static'), name='static')
 app.mount('/local-assets', StaticFiles(directory=LOCAL_ASSETS), name='local-assets')
 settings = get_settings()
+runtime_ui_password = settings.ui_password
 jobs: dict[UUID, JobState] = {}
 tasks: dict[UUID, asyncio.Task] = {}
 requests_by_ip: dict[str, deque[datetime]] = defaultdict(deque)
@@ -44,7 +45,7 @@ def allow(ip: str) -> bool:
 
 
 def ui_auth_configured() -> bool:
-    return bool(settings.ui_username and settings.ui_password and settings.ui_session_secret)
+    return bool(settings.ui_username and runtime_ui_password and settings.ui_session_secret)
 
 
 def make_session(username: str) -> str:
@@ -104,10 +105,32 @@ async def login(request: Request):
         raise HTTPException(400, 'Requête de connexion invalide.')
     username = str(body.get('username', ''))
     password = str(body.get('password', ''))
-    if not hmac.compare_digest(username, settings.ui_username) or not hmac.compare_digest(password, settings.ui_password):
+    if not hmac.compare_digest(username, settings.ui_username) or not hmac.compare_digest(password, runtime_ui_password):
         raise HTTPException(401, 'Identifiants invalides.')
     response = JSONResponse({'ok': True})
     response.set_cookie(UI_COOKIE, make_session(username), httponly=True, secure=True, samesite='lax', max_age=8 * 3600, path='/')
+    return response
+
+
+@app.post('/auth/reset', include_in_schema=False)
+async def reset_password(request: Request):
+    global runtime_ui_password
+    if not settings.ui_recovery_code:
+        raise HTTPException(503, 'La récupération n’est pas configurée côté serveur.')
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(400, 'Requête de récupération invalide.')
+    username = str(body.get('username', ''))
+    recovery_code = str(body.get('recovery_code', ''))
+    new_password = str(body.get('new_password', ''))
+    if not hmac.compare_digest(username, settings.ui_username) or not hmac.compare_digest(recovery_code, settings.ui_recovery_code):
+        raise HTTPException(401, 'Code de récupération invalide.')
+    if len(new_password) < 10:
+        raise HTTPException(400, 'Le nouveau mot de passe doit contenir au moins 10 caractères.')
+    runtime_ui_password = new_password
+    response = JSONResponse({'ok': True, 'message': 'Mot de passe réinitialisé. Utilisez-le pour vous reconnecter.'})
+    response.delete_cookie(UI_COOKIE, path='/')
     return response
 
 
