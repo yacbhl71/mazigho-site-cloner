@@ -34,7 +34,7 @@ async def execute(job_id: UUID, payload: CloneRequest):
     async with semaphore:
         state = jobs[job_id]
         try:
-            await asyncio.wait_for(Pipeline(settings, state).run(str(payload.url), payload.mazigho_user_id, payload.mazigho_project_name, payload.force), timeout=settings.max_clone_duration_seconds)
+            await asyncio.wait_for(Pipeline(settings, state).run(str(payload.url), payload.mazigho_user_id, payload.mazigho_project_name, payload.force, payload.shopify_password), timeout=settings.max_clone_duration_seconds)
         except asyncio.TimeoutError:
             state.status, state.progress, state.error, state.message = JobStatus.FAILED, 100, f'Durée maximale dépassée ({settings.max_clone_duration_seconds}s)', 'Le clonage a dépassé le délai maximal.'
         except Exception as exc:

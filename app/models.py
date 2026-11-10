@@ -11,6 +11,9 @@ class CloneRequest(BaseModel):
     url: HttpUrl
     mazigho_user_id: str = Field(min_length=1, max_length=160)
     mazigho_project_name: str | None = Field(default=None, max_length=160)
+    # Secret éphémère : utilisé uniquement pour déverrouiller une boutique
+    # Shopify de développement, jamais recopié dans JobState ou les résultats.
+    shopify_password: str | None = Field(default=None, min_length=1, max_length=256)
     force: bool = False
     @field_validator('url')
     @classmethod

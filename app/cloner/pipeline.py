@@ -18,7 +18,7 @@ class Pipeline:
     def __init__(self, settings: Settings, state: JobState): self.settings, self.state = settings, state
     def update(self, status: JobStatus, progress: int, message: str):
         self.state.status, self.state.progress, self.state.message, self.state.updated_at = status, progress, message, __import__('datetime').datetime.now(__import__('datetime').timezone.utc)
-    async def run(self, url: str, user_id: str, project_name: str | None, force: bool = False):
+    async def run(self, url: str, user_id: str, project_name: str | None, force: bool = False, shopify_password: str | None = None):
         try:
             timeout = httpx.Timeout(self.settings.request_timeout_seconds)
             async with httpx.AsyncClient(timeout=timeout, headers={'User-Agent': self.settings.user_agent}) as client:
@@ -34,6 +34,17 @@ class Pipeline:
                     page = await browser.new_page(user_agent=self.settings.user_agent, viewport={'width': 1440, 'height': 1000})
                     try: await page.goto(detection.final_url, wait_until='domcontentloaded', timeout=int(self.settings.request_timeout_seconds*1000))
                     except Exception: pass
+                    if detection.platform == 'shopify' and shopify_password:
+                        password_input = page.locator('input[type="password"]').first
+                        if await password_input.count():
+                            await password_input.fill(shopify_password)
+                            await password_input.press('Enter')
+                            try: await page.wait_for_load_state('domcontentloaded', timeout=15000)
+                            except Exception: pass
+                            if await page.locator('input[type="password"]').count():
+                                raise RuntimeError('Mot de passe Shopify refusé ou boutique toujours verrouillée.')
+                            for cookie in await page.context.cookies():
+                                client.cookies.set(cookie['name'], cookie['value'], domain=cookie.get('domain'), path=cookie.get('path', '/'))
                     self.update(JobStatus.EXTRACTING, 25, 'Extraction des produits et pages…')
                     extractor = {'shopify': ShopifyExtractor, 'woocommerce': WooCommerceExtractor}.get(detection.platform, GenericExtractor)(detection.final_url, client, page)
                     extracted = await extractor.extract()
