@@ -57,7 +57,7 @@ def analyze(html: str) -> dict[str, Any]:
             'text': text[:900],
             'imageUrl': str(image.get('src') or '').strip() if image else '',
             'links': links,
-            'order': index,
+            'position': index,
         })
     return {
         'sections': sections,
