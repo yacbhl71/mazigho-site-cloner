@@ -64,21 +64,34 @@ class Pipeline:
                 for product in extracted.get('products', []):
                     for image in product.get('images', []) or []:
                         if isinstance(image, dict) and (u := (image.get('src') or image.get('url'))): image_urls.append(u)
-                for index, original in enumerate(dict.fromkeys(image_urls)):
-                    asset = await download_and_optimize(
-                        original,
-                        client,
-                        self.settings.image_max_width,
-                        self.settings.image_thumb_width,
-                        self.settings.image_unchanged_threshold_bytes,
-                        timeout_seconds=self.settings.asset_download_timeout_seconds,
-                    )
-                    if asset:
-                        assets[original] = await asyncio.to_thread(uploader.put, asset.content, original, asset.content_type, asset.extension)
-                        if asset.thumbnail and asset.thumbnail_content_type:
-                            assets[f'{original}#thumb'] = await asyncio.to_thread(uploader.put, asset.thumbnail, original, asset.thumbnail_content_type, 'webp', thumbnail=True)
-                    else: self.state.warnings.append(f'Image non téléchargée : {original}')
-                    self.state.progress = min(85, 60 + int((index+1)/max(len(set(image_urls)),1)*25))
+                unique_image_urls = list(dict.fromkeys(image_urls))
+                asset_semaphore = asyncio.Semaphore(8)
+
+                async def process_asset(index: int, original: str):
+                    async with asset_semaphore:
+                        asset = await download_and_optimize(
+                            original,
+                            client,
+                            self.settings.image_max_width,
+                            self.settings.image_thumb_width,
+                            self.settings.image_unchanged_threshold_bytes,
+                            timeout_seconds=self.settings.asset_download_timeout_seconds,
+                        )
+                        if asset:
+                            # Product pages only reference the canonical image. Do not
+                            # upload unused thumbnails: this halves Blob requests for
+                            # large catalogs and keeps the free Render plan reliable.
+                            uploaded = await asyncio.to_thread(uploader.put, asset.content, original, asset.content_type, asset.extension)
+                            return index, original, uploaded, None
+                        return index, original, None, f'Image non téléchargée : {original}'
+
+                results = await asyncio.gather(*(process_asset(index, original) for index, original in enumerate(unique_image_urls)))
+                for index, original, uploaded, warning in sorted(results):
+                    if uploaded:
+                        assets[original] = uploaded
+                    if warning:
+                        self.state.warnings.append(warning)
+                    self.state.progress = min(85, 60 + int((index + 1) / max(len(unique_image_urls), 1) * 25))
                 project = rebuild(user_id, project_name or f'Import {urlparse(url).netloc}', url, detection.platform, extracted, analysis, assets)
                 project['settings'].update({'robotsStatus': detection.robots_status, 'robotsForceConfirmed': self.state.force_confirmed})
                 self.update(JobStatus.SENDING, 90, 'Envoi du projet vers MAZIGHO…')
