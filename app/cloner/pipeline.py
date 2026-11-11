@@ -57,6 +57,16 @@ class Pipeline:
                     self.update(JobStatus.ANALYZING, 45, 'Analyse du design et des sections…')
                     analysis = analyze(await page.content())
                     await browser.close()
+                # Persist a usable manual export before the potentially slow
+                # image optimization/upload phase. The payload keeps original
+                # HTTPS image URLs and can therefore be imported even when the
+                # free Render instance reaches its time limit later.
+                export_dir = Path('/tmp/mazigho-cloner-exports')
+                export_dir.mkdir(parents=True, exist_ok=True)
+                early_project = rebuild(user_id, project_name or f'Import {urlparse(url).netloc}', url, detection.platform, extracted, analysis, {})
+                early_project['settings'].update({'robotsStatus': detection.robots_status, 'robotsForceConfirmed': self.state.force_confirmed})
+                (export_dir / f'{self.state.job_id}.json').write_text(json.dumps(early_project, ensure_ascii=False), encoding='utf-8')
+                self.state.export_url = f'/clone/{self.state.job_id}/export'
                 self.update(JobStatus.UPLOADING, 60, 'Optimisation et stockage des images…')
                 # A newly imported store ID does not exist until MAZIGHO creates
                 # the draft. Use a job-scoped prefix locally; production can pass
@@ -96,8 +106,6 @@ class Pipeline:
                     self.state.progress = min(85, 60 + int((index + 1) / max(len(unique_image_urls), 1) * 25))
                 project = rebuild(user_id, project_name or f'Import {urlparse(url).netloc}', url, detection.platform, extracted, analysis, assets)
                 project['settings'].update({'robotsStatus': detection.robots_status, 'robotsForceConfirmed': self.state.force_confirmed})
-                export_dir = Path('/tmp/mazigho-cloner-exports')
-                export_dir.mkdir(parents=True, exist_ok=True)
                 (export_dir / f'{self.state.job_id}.json').write_text(json.dumps(project, ensure_ascii=False), encoding='utf-8')
                 self.state.export_url = f'/clone/{self.state.job_id}/export'
                 self.update(JobStatus.SENDING, 90, 'Envoi du projet vers MAZIGHO…')
