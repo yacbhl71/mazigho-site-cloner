@@ -96,7 +96,15 @@ def rebuild(user_id: str, name: str, source_url: str, platform: str, extracted: 
         variants = product.get("variants", []) or []
         catalog.append({"id": f"prod_{index + 1:03d}", "title": str(product.get("title") or product.get("name") or "Produit importé")[:200], "description": str(product.get("body_html") or product.get("description") or "")[:10000], "price": _price((variants[0] if variants else {}).get("price") if variants else product.get("price")), "compareAtPrice": _price((variants[0] if variants else {}).get("compare_at_price") if variants else product.get("compare_at_price")), "currency": "EUR", "images": image_urls, "variants": [_sanitize_variant(variant, product, assets) for variant in variants if isinstance(variant, dict)], "tags": product.get("tags", []) if isinstance(product.get("tags", []), list) else str(product.get("tags", "")).split(", "), "type": str(product.get("product_type", ""))[:100], "vendor": str(product.get("vendor", ""))[:160]})
     sections = analysis.get("sections", ["header", "hero", "product-grid", "footer"])
-    home_blocks = [{"id": f"blk_{i + 1:03d}", "type": kind, "component": "".join(part.title() for part in kind.split("-")) + "Section", "props": {}} for i, kind in enumerate(sections)]
+    visual_blocks = analysis.get("visual_blocks", []) if isinstance(analysis.get("visual_blocks", []), list) else []
+    home_blocks = []
+    for i, kind in enumerate(sections):
+        match = next((block for block in visual_blocks if block.get("type") == kind), None)
+        props = dict(match or {})
+        if props.get("imageUrl"):
+            raw_image = str(props["imageUrl"])
+            props["imageUrl"] = assets.get(raw_image, raw_image)
+        home_blocks.append({"id": f"blk_{i + 1:03d}", "type": kind, "component": "".join(part.title() for part in kind.split("-")) + "Section", "props": props})
     pages: dict[str, dict[str, Any]] = {"home": {"title": "Accueil", "handle": "home", "category": "essentielle", "blocks": home_blocks, "reviewRequired": False}}
     for index, page in enumerate(extracted.get("pages", [])):
         handle = str(page.get("handle") or f"page-{index + 1}").strip()[:180] or f"page-{index + 1}"

@@ -30,8 +30,38 @@ def analyze(html: str) -> dict[str, Any]:
                     colors[value.strip()] += 1
                 if key.strip() == 'font-family': fonts[value.strip()] += 1
     palette = [c for c, _ in colors.most_common(5)]
+    visual_blocks: list[dict[str, Any]] = []
+    candidates = soup.find_all(['header', 'main', 'section', 'footer'])
+    for index, node in enumerate(candidates[:24]):
+        text = node.get_text(' ', strip=True)
+        if len(text) < 12 and not node.find('img'):
+            continue
+        marker = f"{node.name} {node.get('id','')} {' '.join(node.get('class', []))}".lower()
+        kind = 'custom'
+        for candidate, tokens in SECTION_RULES.items():
+            if any(token in marker for token in tokens):
+                kind = candidate
+                break
+        heading = node.find(['h1', 'h2', 'h3'])
+        image = node.find('img')
+        links = []
+        for link in node.find_all('a', href=True)[:8]:
+            label = link.get_text(' ', strip=True)
+            href = str(link.get('href') or '').strip()
+            if label and href:
+                links.append({'label': label[:100], 'href': href[:500]})
+        visual_blocks.append({
+            'id': f'visual-{index + 1}',
+            'type': kind,
+            'title': heading.get_text(' ', strip=True)[:180] if heading else '',
+            'text': text[:900],
+            'imageUrl': str(image.get('src') or '').strip() if image else '',
+            'links': links,
+            'order': index,
+        })
     return {
         'sections': sections,
+        'visual_blocks': visual_blocks,
         'design_system': {
             'colors': {'primary': palette[0] if palette else '#1a1a2e', 'secondary': palette[1] if len(palette)>1 else '#16213e', 'accent': palette[2] if len(palette)>2 else '#e94560', 'background': '#ffffff', 'text': '#333333'},
             'fonts': {'heading': fonts.most_common(1)[0][0] if fonts else "'Inter', sans-serif", 'body': fonts.most_common(1)[0][0] if fonts else "'Inter', sans-serif"},
