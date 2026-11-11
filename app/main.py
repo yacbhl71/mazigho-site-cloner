@@ -21,6 +21,8 @@ from app.models import CloneRequest, CloneResponse, JobState, JobStatus
 ROOT = Path(__file__).resolve().parent.parent
 LOCAL_ASSETS = Path('/tmp/mazigho-cloner-assets')
 LOCAL_ASSETS.mkdir(parents=True, exist_ok=True)
+EXPORTS = Path('/tmp/mazigho-cloner-exports')
+EXPORTS.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title='MAZIGHO Site Cloner', version='1.0.0')
 app.mount('/static', StaticFiles(directory=ROOT / 'static'), name='static')
 app.mount('/local-assets', StaticFiles(directory=LOCAL_ASSETS), name='local-assets')
@@ -176,3 +178,12 @@ async def get_clone(job_id: UUID, request: Request):
     if not state:
         raise HTTPException(404, 'Job introuvable')
     return state
+
+
+@app.get('/clone/{job_id}/export', include_in_schema=False)
+async def download_clone_export(job_id: UUID, request: Request):
+    require_ui_or_server(request)
+    path = EXPORTS / f'{job_id}.json'
+    if not path.is_file():
+        raise HTTPException(404, 'Export introuvable ou expiré.')
+    return FileResponse(path, media_type='application/json', filename=f'mazigho-clone-{job_id}.json')

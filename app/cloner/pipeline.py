@@ -1,4 +1,6 @@
 import asyncio
+import json
+from pathlib import Path
 from urllib.parse import urlparse
 import httpx
 from playwright.async_api import async_playwright
@@ -94,6 +96,10 @@ class Pipeline:
                     self.state.progress = min(85, 60 + int((index + 1) / max(len(unique_image_urls), 1) * 25))
                 project = rebuild(user_id, project_name or f'Import {urlparse(url).netloc}', url, detection.platform, extracted, analysis, assets)
                 project['settings'].update({'robotsStatus': detection.robots_status, 'robotsForceConfirmed': self.state.force_confirmed})
+                export_dir = Path('/tmp/mazigho-cloner-exports')
+                export_dir.mkdir(parents=True, exist_ok=True)
+                (export_dir / f'{self.state.job_id}.json').write_text(json.dumps(project, ensure_ascii=False), encoding='utf-8')
+                self.state.export_url = f'/clone/{self.state.job_id}/export'
                 self.update(JobStatus.SENDING, 90, 'Envoi du projet vers MAZIGHO…')
                 result = await MazighoClient(self.settings).import_project(project)
                 self.state.mazigho_project_url = result.get('project_url') or result.get('editor_url')

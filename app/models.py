@@ -34,6 +34,7 @@ class JobState(BaseModel):
     message: str = ''
     error: str | None = None
     mazigho_project_url: str | None = None
+    export_url: str | None = None
     robots_warning: str | None = None
     robots_status: str = 'unknown'
     force_confirmed: bool = False
