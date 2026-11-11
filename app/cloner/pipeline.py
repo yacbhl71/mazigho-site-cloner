@@ -55,7 +55,7 @@ class Pipeline:
                     self.state.images_count = sum(len(product.get('images', []) or []) for product in extracted.get('products', []))
                     self.state.pages_count = len(extracted.get('pages', []))
                     self.update(JobStatus.ANALYZING, 45, 'Analyse du design et des sections…')
-                    analysis = analyze(await page.content())
+                    analysis = analyze(await page.content(), detection.final_url)
                     await browser.close()
                 # Persist a usable manual export before the potentially slow
                 # image optimization/upload phase. The payload keeps original

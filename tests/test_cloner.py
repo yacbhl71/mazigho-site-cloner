@@ -14,6 +14,19 @@ def test_analyzer_detects_sections():
     result = analyze('<header>Menu</header><section class="hero">Hero</section><div class="product-grid">x</div><footer>Footer</footer>')
     assert 'header' in result['sections'] and 'hero' in result['sections'] and 'product-grid' in result['sections'] and 'footer' in result['sections']
 
+
+def test_analyzer_exports_rich_rendered_visual_props_in_order():
+    html = '''<section class="hero"><h1>Real food</h1><p>Balanced energy</p><img src="//cdn.example.test/hero.jpg" alt="Hero"><a href="/shop">SHOP NOW</a></section>
+    <section class="reviews"><h2>Reviews</h2><p>★★★★★ Great bar</p></section>'''
+    result = analyze(html, 'https://shop.example.test/')
+    project = rebuild('operator-yacbhl71', 'Demo', 'https://shop.example.test/', 'shopify', {'products': [], 'pages': [], 'navigation': []}, result, {})
+    blocks = project['pages']['home']['blocks']
+    assert blocks[0]['type'] == 'hero'
+    assert blocks[0]['props']['imageUrl'] == 'https://cdn.example.test/hero.jpg'
+    assert blocks[0]['props']['buttonLabel'] == 'SHOP NOW'
+    assert any(block['type'] == 'testimonials' for block in blocks)
+
+
 def test_rebuilder_never_includes_payment_data():
     project = rebuild('u1','Demo','https://shop.test','shopify',{'products':[{'title':'A','price':10,'images':[]}],'navigation':[]},{'sections':['header']},{})
     assert project['catalog'][0]['price'] == 10

@@ -98,13 +98,24 @@ def rebuild(user_id: str, name: str, source_url: str, platform: str, extracted: 
     sections = analysis.get("sections", ["header", "hero", "product-grid", "footer"])
     visual_blocks = analysis.get("visual_blocks", []) if isinstance(analysis.get("visual_blocks", []), list) else []
     home_blocks = []
-    for i, kind in enumerate(sections):
-        match = next((block for block in visual_blocks if block.get("type") == kind), None)
-        props = dict(match or {})
+    # Keep every rendered section, not only the first section of each type.
+    # Shopify themes frequently contain several anonymous/custom sections whose
+    # order is essential to the visual composition.
+    source_blocks = visual_blocks or [{"type": kind, "position": index} for index, kind in enumerate(sections)]
+    for i, block in enumerate(source_blocks[:32]):
+        kind = str(block.get("type") or "custom")
+        props = {key: value for key, value in block.items() if key not in {"id", "type", "position"}}
         if props.get("imageUrl"):
             raw_image = str(props["imageUrl"])
             props["imageUrl"] = assets.get(raw_image, raw_image)
-        home_blocks.append({"id": f"blk_{i + 1:03d}", "type": kind, "component": "".join(part.title() for part in kind.split("-")) + "Section", "props": props})
+        if isinstance(props.get("galleryItems"), list):
+            props["galleryItems"] = [
+                {**item, "imageUrl": assets.get(str(item.get("imageUrl")), item.get("imageUrl"))}
+                for item in props["galleryItems"]
+                if isinstance(item, dict)
+            ]
+        component = "".join(part.title() for part in kind.split("-")) + "Section"
+        home_blocks.append({"id": f"blk_{i + 1:03d}", "type": kind, "component": component, "props": props})
     pages: dict[str, dict[str, Any]] = {"home": {"title": "Accueil", "handle": "home", "category": "essentielle", "blocks": home_blocks, "reviewRequired": False}}
     for index, page in enumerate(extracted.get("pages", [])):
         handle = str(page.get("handle") or f"page-{index + 1}").strip()[:180] or f"page-{index + 1}"
