@@ -4,6 +4,14 @@ from bs4 import BeautifulSoup
 from .base import BaseExtractor
 
 class GenericExtractor(BaseExtractor):
+    @staticmethod
+    def _price_value(value: str) -> float:
+        normalized = re.sub(r"[^0-9,.-]", "", value or "").replace(",", ".")
+        try:
+            return float(normalized)
+        except ValueError:
+            return 0.0
+
     async def extract(self) -> dict:
         # Prefer the Playwright-rendered DOM when available. Modern storefronts
         # often ship only an empty React root over HTTP and populate the product
@@ -39,6 +47,8 @@ class GenericExtractor(BaseExtractor):
                 if product_url:
                     seen_product_urls.add(product_url)
                 image_url = urljoin(self.base_url + '/', image.get('src')) if image and image.get('src') else ''
-                products.append({'title': title.get_text(' ', strip=True) if title else 'Produit', 'description': text[:1000], 'price_text': price.group(0) if price else '', 'url': product_url, 'images': [{'src': image_url}] if image_url else []})
+                price_text = price.group(0) if price else ''
+                currency = 'CHF' if 'CHF' in price_text.upper() else ('EUR' if '€' in price_text else '')
+                products.append({'title': title.get_text(' ', strip=True) if title else 'Produit', 'description': text[:1000], 'price_text': price_text, 'price': self._price_value(price_text), 'currency': currency, 'url': product_url, 'images': [{'src': image_url}] if image_url else []})
         navigation = [{'label': a.get_text(' ', strip=True), 'href': a.get('href')} for a in soup.select('nav a, header a') if a.get_text(strip=True)][:50]
         return {'products': products, 'collections': [], 'pages': [], 'navigation': navigation}
