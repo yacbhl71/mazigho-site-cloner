@@ -22,14 +22,10 @@ class GenericExtractor(BaseExtractor):
         # Generic MAZIGHO-style storefronts expose canonical product links even
         # when their utility classes do not contain the words product/card.
         for link in soup.select('a[href*="/produit/"], a[href*="/product/"]'):
-            parent = link
-            for _ in range(4):
-                if parent.parent is None:
-                    break
-                parent = parent.parent
-                if parent.name in {'article', 'li'} or parent.find('img'):
-                    break
-            cards.append(parent)
+            # Keep the anchor itself: climbing to a section can merge all
+            # product cards into one parent and make the de-duplication drop
+            # every product after the first.
+            cards.append(link)
         for card in cards[:2500]:
             title = card.select_one('h1,h2,h3,h4,[class*="title"]')
             image = card.select_one('img')
