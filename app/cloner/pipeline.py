@@ -48,6 +48,13 @@ class Pipeline:
                         await page.wait_for_timeout(1500)
                     except Exception:
                         pass
+                    try:
+                        await page.wait_for_function(
+                            "document.querySelectorAll('a[href*=\\\"/produit/\\\"], a[href*=\\\"/product/\\\"]').length > 0",
+                            timeout=8000,
+                        )
+                    except Exception:
+                        pass
                     if detection.platform == 'shopify' and shopify_password:
                         password_input = page.locator('input[type="password"]').first
                         if await password_input.count():
