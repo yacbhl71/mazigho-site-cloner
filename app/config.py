@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = 45.0
     asset_download_timeout_seconds: float = 90.0
     asset_upload_timeout_seconds: float = 120.0
+    asset_processing_timeout_seconds: float = 240.0
     mazigho_import_timeout_seconds: float = 120.0
     mazigho_api_url: str = ''
     mazigho_api_key: str = ''

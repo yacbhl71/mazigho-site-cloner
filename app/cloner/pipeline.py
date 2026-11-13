@@ -116,7 +116,16 @@ class Pipeline:
                             return index, original, uploaded, None
                         return index, original, None, f'Image non téléchargée : {original}'
 
-                results = await asyncio.gather(*(process_asset(index, original) for index, original in enumerate(unique_image_urls)))
+                asset_tasks = [asyncio.create_task(process_asset(index, original)) for index, original in enumerate(unique_image_urls)]
+                done, pending = await asyncio.wait(asset_tasks, timeout=self.settings.asset_processing_timeout_seconds)
+                if pending:
+                    self.state.warnings.append(
+                        f'{len(pending)} image(s) non finalisée(s) dans la fenêtre média ; les URL originales sont conservées dans l’export.'
+                    )
+                    for task in pending:
+                        task.cancel()
+                    await asyncio.gather(*pending, return_exceptions=True)
+                results = [task.result() for task in done if not task.cancelled() and task.exception() is None]
                 for index, original, uploaded, warning in sorted(results):
                     if uploaded:
                         assets[original] = uploaded
