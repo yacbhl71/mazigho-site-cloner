@@ -38,6 +38,7 @@ class JobState(BaseModel):
     robots_warning: str | None = None
     robots_status: str = 'unknown'
     force_confirmed: bool = False
+    recommended_theme: dict[str, Any] | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

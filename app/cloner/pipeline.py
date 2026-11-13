@@ -125,6 +125,7 @@ class Pipeline:
                     self.state.progress = min(85, 60 + int((index + 1) / max(len(unique_image_urls), 1) * 25))
                 project = rebuild(user_id, project_name or f'Import {urlparse(url).netloc}', url, detection.platform, extracted, analysis, assets)
                 project['settings'].update({'robotsStatus': detection.robots_status, 'robotsForceConfirmed': self.state.force_confirmed})
+                self.state.recommended_theme = project.get('settings', {}).get('recommendedTheme')
                 (export_dir / f'{self.state.job_id}.json').write_text(json.dumps(project, ensure_ascii=False), encoding='utf-8')
                 self.state.export_url = f'/clone/{self.state.job_id}/export'
                 self.update(JobStatus.SENDING, 90, 'Envoi du projet vers MAZIGHO…')
