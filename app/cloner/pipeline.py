@@ -36,6 +36,18 @@ class Pipeline:
                     page = await browser.new_page(user_agent=self.settings.user_agent, viewport={'width': 1440, 'height': 1000})
                     try: await page.goto(detection.final_url, wait_until='domcontentloaded', timeout=int(self.settings.request_timeout_seconds*1000))
                     except Exception: pass
+                    # Generic storefronts are frequently React/Next clients:
+                    # `domcontentloaded` can occur before their catalogue query
+                    # has populated the root. Give the rendered DOM a short,
+                    # bounded settling window before parsing it.
+                    try:
+                        await page.wait_for_load_state('networkidle', timeout=8000)
+                    except Exception:
+                        pass
+                    try:
+                        await page.wait_for_timeout(1500)
+                    except Exception:
+                        pass
                     if detection.platform == 'shopify' and shopify_password:
                         password_input = page.locator('input[type="password"]').first
                         if await password_input.count():
