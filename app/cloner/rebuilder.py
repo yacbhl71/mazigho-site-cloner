@@ -12,6 +12,30 @@ ESSENTIAL_KEYWORDS = (
 ARCHIVE_KEYWORDS = ("ambassador", "affiliate", "test", "copy", "old", "backup")
 ARCHIVE_YEARS = tuple(str(year) for year in range(2018, 2024))
 
+THEME_SIGNALS = {
+    "fashion": ("mode", "vêtement", "robe", "chemise", "blazer", "maille", "chaussure", "sac", "accessoire", "vestiaire"),
+    "beauty": ("beauté", "cosmétique", "soin", "parfum", "sérum", "coiffure", "maquillage"),
+    "home": ("maison", "déco", "décoration", "mobilier", "céramique", "linge", "intérieur"),
+    "jewelry": ("bijou", "joaillerie", "bague", "collier", "bracelet", "montre"),
+    "sport": ("sport", "fitness", "running", "yoga", "entraînement", "outdoor"),
+    "coffee": ("café", "thé", "épicerie", "gourmand", "pâtisserie", "chocolat"),
+}
+
+
+def recommend_theme(extracted: dict[str, Any], analysis: dict[str, Any]) -> dict[str, Any]:
+    """Return a safe, reusable MAZIGHO theme hint without forcing publication."""
+    text_parts = []
+    for product in extracted.get("products", []) or []:
+        text_parts.extend(str(product.get(key) or "") for key in ("title", "name", "description", "product_type", "tags"))
+    text_parts.extend(str(block) for block in analysis.get("visual_blocks", []) or [])
+    haystack = " ".join(text_parts).lower()
+    scores = {theme: sum(haystack.count(signal) for signal in signals) for theme, signals in THEME_SIGNALS.items()}
+    theme_id, score = max(scores.items(), key=lambda item: item[1], default=("fashion", 0))
+    if score == 0:
+        return {"themeId": "fashion", "confidence": "low", "reasons": ["Aucun signal sectoriel suffisamment précis n’a été détecté."]}
+    confidence = "high" if score >= 3 else "medium"
+    return {"themeId": theme_id, "confidence": confidence, "reasons": [f"{score} signal(s) sectoriel(s) détecté(s) dans le catalogue et les blocs visuels."]}
+
 
 def _price(value: Any) -> float:
     try:
@@ -131,4 +155,5 @@ def rebuild(user_id: str, name: str, source_url: str, platform: str, extracted: 
             href = _safe_href(item.get("href")); label = str(item.get("label") or "").strip()[:80]
             if href and label: navigation.append({"label": label, "href": href})
     currency = next((str(item.get("currency")) for item in catalog if item.get("currency")), "EUR")
-    return {"user_id": user_id, "project_name": name, "source_url": source_url, "platform": platform, "theme": analysis.get("design_system", {}), "pages": pages, "catalog": catalog, "navigation": navigation[:50], "settings": {"currency": currency, "clonedFrom": source_url, "clonedPlatform": platform, "clonedAt": datetime.now(timezone.utc).isoformat()}}
+    theme_recommendation = recommend_theme(extracted, analysis)
+    return {"user_id": user_id, "project_name": name, "source_url": source_url, "platform": platform, "theme": analysis.get("design_system", {}), "pages": pages, "catalog": catalog, "navigation": navigation[:50], "settings": {"currency": currency, "clonedFrom": source_url, "clonedPlatform": platform, "clonedAt": datetime.now(timezone.utc).isoformat(), "recommendedTheme": theme_recommendation}}

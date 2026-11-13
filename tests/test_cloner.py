@@ -1,5 +1,5 @@
 from app.cloner.analyzer import analyze
-from app.cloner.rebuilder import _classify_page, rebuild
+from app.cloner.rebuilder import _classify_page, rebuild, recommend_theme
 from app.models import CloneRequest, JobStatus
 from app.platforms.woocommerce import WooCommerceExtractor
 from app.cloner.detector import detect, FORCED_WARNING, ROBOTS_BLOCKED_ERROR
@@ -31,6 +31,14 @@ def test_rebuilder_never_includes_payment_data():
     project = rebuild('u1','Demo','https://shop.test','shopify',{'products':[{'title':'A','price':10,'images':[]}],'navigation':[]},{'sections':['header']},{})
     assert project['catalog'][0]['price'] == 10
     assert 'payment' not in str(project).lower() and 'checkout' not in str(project).lower()
+
+
+def test_rebuilder_recommends_reusable_theme_without_forcing_it():
+    recommendation = recommend_theme({"products": [{"title": "Blazer et robe en maille"}]}, {"visual_blocks": []})
+    assert recommendation["themeId"] == "fashion"
+    assert recommendation["confidence"] == "high"
+    project = rebuild("u1", "Demo", "https://shop.test", "generic", {"products": [{"title": "Blazer", "price": 89, "currency": "CHF", "images": []}], "navigation": []}, {"sections": ["hero"]}, {})
+    assert project["settings"]["recommendedTheme"]["themeId"] == "fashion"
 
 def test_rebuilder_strips_shopify_variant_metadata_and_nulls():
     project = rebuild('u1', 'Demo', 'https://shop.test', 'shopify', {
